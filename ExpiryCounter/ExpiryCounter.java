@@ -22,8 +22,14 @@ class ExpiryCounter<T> {
 
     public synchronized int getTotalElements() {
         removeExpiredElements();
-        return elementTimestamps.values().stream().mapToInt(List::size).sum();
+    
+        int total = 0;
+        for (List<Long> timestamps : elementTimestamps.values()) {
+            total += timestamps.size();
+        }
+        return total;
     }
+    
 
     /**
      * Removes expired timestamps from the entire map using binary search.
