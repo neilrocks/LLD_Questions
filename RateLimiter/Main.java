@@ -191,7 +191,7 @@ class RateLimiterService{
     }
 }
 public class Main{
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         RateLimiterService service=RateLimiterService.getInstance();
         RateLimiterConfig userAConfig=new RateLimiterConfig(10, 3);
         RateLimiterConfig userBConfig=new RateLimiterConfig(10, 100);
@@ -203,22 +203,10 @@ public class Main{
         service.addClient(userA, userAConfig);
         service.addClient(userB, userBConfig);
 
-        boolean res=false;
-        res=service.allowRequest(userA);
-        if(!res){
-            System.out.println("Request from userA is ratelimited");
-        }
-        res=service.allowRequest(userA);
-        if(!res){
-            System.out.println("Request from userA is ratelimited");
-        }
-        res=service.allowRequest(userA);
-        if(!res){
-            System.out.println("Request from userA is ratelimited");
-        }
-        res=service.allowRequest(userB);
-        if(!res){
-            System.out.println("Request from userB is ratelimited");
+        for (int i = 1; i <= 5; i++) {
+            boolean res = service.allowRequest(userA);
+            System.out.println("Request " + i + " from userA allowed? " + res);
+            Thread.sleep(1000); // simulate 1s between requests
         }
     }
 }
