@@ -1,3 +1,5 @@
+import java.util.Arrays;
+
 class DSU{
     int[]par;
     int[]size;
