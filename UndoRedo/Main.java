@@ -139,3 +139,150 @@ public class Main {
         System.out.println(editor.getText()); // Hello World
     }
 }
+// *******************************************************************
+
+/** IF DELTA EDIT FOR MEMORY EFFICIENCY THEN BELOW CODE IS USED*/
+
+//******************************************************************** 
+import java.util.*;
+
+// Command interface
+interface Command {
+    void execute();
+    void undo();
+}
+
+// Receiver: Actual text editor
+class TextEditor {
+
+    private StringBuilder text = new StringBuilder();
+
+    public void insert(int pos, String str) {
+        text.insert(pos, str);
+    }
+
+    public void delete(int pos, int len) {
+        text.delete(pos, pos + len);
+    }
+
+    public String substring(int pos, int len) {
+        return text.substring(pos, pos + len);
+    }
+
+    public String getText() {
+        return text.toString();
+    }
+}
+
+// Represents the delta change between two states
+class Edit {
+
+    int position;
+    String insertedText;
+    String deletedText;
+
+    public Edit(int position, String insertedText, String deletedText) {
+        this.position = position;
+        this.insertedText = insertedText;
+        this.deletedText = deletedText;
+    }
+}
+
+// Command storing only the edit delta
+class EditCommand implements Command {
+
+    private TextEditor editor;
+    private Edit edit;
+
+    public EditCommand(TextEditor editor, Edit edit) {
+        this.editor = editor;
+        this.edit = edit;
+    }
+
+    // Apply the edit
+    public void execute() {
+
+        if (edit.deletedText != null) {
+            editor.delete(edit.position, edit.deletedText.length());
+        }
+
+        if (edit.insertedText != null) {
+            editor.insert(edit.position, edit.insertedText);
+        }
+    }
+
+    // Reverse the edit
+    public void undo() {
+
+        if (edit.insertedText != null) {
+            editor.delete(edit.position, edit.insertedText.length());
+        }
+
+        if (edit.deletedText != null) {
+            editor.insert(edit.position, edit.deletedText);
+        }
+    }
+}
+
+// Invoker: manages command history
+class CommandManager {
+
+    private Deque<Command> undoStack = new ArrayDeque<>();
+    private Deque<Command> redoStack = new ArrayDeque<>();
+
+    public void executeCommand(Command cmd) {
+        cmd.execute();
+        undoStack.push(cmd);
+        redoStack.clear();
+    }
+
+    public void undo() {
+
+        if (!undoStack.isEmpty()) {
+            Command cmd = undoStack.pop();
+            cmd.undo();
+            redoStack.push(cmd);
+        }
+    }
+
+    public void redo() {
+
+        if (!redoStack.isEmpty()) {
+            Command cmd = redoStack.pop();
+            cmd.execute();
+            undoStack.push(cmd);
+        }
+    }
+}
+
+public class Main {
+
+    public static void main(String[] args) {
+
+        TextEditor editor = new TextEditor();
+        CommandManager manager = new CommandManager();
+
+        // Insert "Hello"
+        manager.executeCommand(
+                new EditCommand(editor, new Edit(0, "Hello", null)));
+
+        // Insert " World"
+        manager.executeCommand(
+                new EditCommand(editor, new Edit(5, " World", null)));
+
+        System.out.println(editor.getText()); // Hello World
+
+        // Delete " World"
+        String deleted = editor.substring(5, 6);
+        manager.executeCommand(
+                new EditCommand(editor, new Edit(5, null, deleted)));
+
+        System.out.println(editor.getText()); // Hello
+
+        manager.undo();
+        System.out.println(editor.getText()); // Hello World
+
+        manager.redo();
+        System.out.println(editor.getText()); // Hello
+    }
+}
