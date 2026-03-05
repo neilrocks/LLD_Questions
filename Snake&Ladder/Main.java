@@ -343,7 +343,7 @@ class Game {
 // ─────────────────────────────────────────────
 // Main / Driver
 // ─────────────────────────────────────────────
-public class SnakeLadder {
+public class Main {
     public static void main(String[] args) {
         // Game(boardSize=10, snakes=5, ladders=5, dice=1)
         Game game = new Game(10, 5, 5, 1);
