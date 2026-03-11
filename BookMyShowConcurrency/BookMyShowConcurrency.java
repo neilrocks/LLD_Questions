@@ -1,3 +1,60 @@
+/*
+ * BOOK MY SHOW - LOW LEVEL DESIGN WITH CONCURRENCY HANDLING
+ * ===========================================================
+ * 
+ * REQUIREMENTS:
+ * -------------
+ * 1. Users should be able to search for movies and shows
+ * 2. Users should be able to book seats for a show
+ * 3. Multiple users should be able to book different seats concurrently
+ * 4. The system should handle race conditions when multiple users try to book the same seat
+ * 5. Seats should be temporarily locked when a user initiates booking
+ * 6. If payment is not completed within TTL (Time To Live), the lock should expire and seats become available
+ * 7. Support multiple payment methods (Card, UPI, Wallet)
+ * 8. System should handle booking confirmation only after successful payment
+ * 9. Theater management: Add theaters, screens, and seats
+ * 10. Show management: Create shows with movie, theater, screen, and timing details
+ * 
+ * CORE ENTITIES:
+ * --------------
+ * 1. Movie - Represents a movie with id, name, and duration
+ * 2. Theater - Represents a cinema hall with multiple screens
+ * 3. Screen - Represents a screen within a theater containing multiple seats
+ * 4. Seat - Abstract class representing different seat types (Regular, Recliner)
+ * 5. Show - Represents a movie screening at a specific theater, screen, and time
+ * 6. Booking - Represents a user's seat reservation with payment details
+ * 7. User - Identified by userId string
+ * 
+ * KEY DESIGN PATTERNS USED:
+ * -------------------------
+ * 1. Repository Pattern - For data access (MovieRepository, TheaterRepository, etc.)
+ * 2. Service Pattern - Business logic layer (MovieService, TheaterService, etc.)
+ * 3. Strategy Pattern - Payment processing (PaymentStrategy interface)
+ * 4. Factory Pattern - Creating payment strategies (PaymentStrategyFactory)
+ * 5. Provider Pattern - Lock management (LockProvider interface)
+ * 
+ * CONCURRENCY HANDLING:
+ * ---------------------
+ * - Distributed locking mechanism using LockProvider
+ * - TTL-based lock expiration to prevent indefinite seat blocking
+ * - ConcurrentHashMap for thread-safe lock storage
+ * - Atomic operations using compute() for lock acquisition
+ * - Background sweeper thread to clean up expired locks
+ * 
+ * BOOKING FLOW:
+ * -------------
+ * 1. User searches for shows
+ * 2. User selects seats and initiates booking (createBooking)
+ *    - System tries to acquire locks on selected seats
+ *    - If successful, booking is created in CREATED state
+ * 3. User completes payment (confirmBooking)
+ *    - System validates locks are still held by the user
+ *    - Payment is processed
+ *    - Locks are released
+ *    - Booking status changes to CONFIRMED
+ * 4. If user doesn't complete payment within TTL, locks expire and seats become available
+ */
+
 package BookMyShowConcurrency;
 
 import java.util.*;
@@ -19,6 +76,33 @@ class BookingService{
         this.lockProvider = lockProvider;
         this.bookingRepository = bookingRepository;
     }
+    
+    /**
+     * CREATE BOOKING - First step in the booking flow
+     * -----------------------------------------------
+     * This method initiates a seat booking for a user.
+     * 
+     * WORKFLOW:
+     * 1. Iterate through all requested seat IDs
+     * 2. For each seat, create a unique lock key: "showId:seatId"
+     * 3. Attempt to acquire a lock on the seat with TTL (5000ms = 5 seconds)
+     *    - If lock acquisition fails, throw SeatNotAvailableException
+     *    - This prevents race conditions when multiple users try to book the same seat
+     * 4. Calculate total price by iterating through all seats in the screen
+     * 5. Create a Booking object with status = CREATED
+     * 6. Store booking in repository
+     * 
+     * CONCURRENCY HANDLING:
+     * - Each seat is locked individually to allow concurrent bookings of different seats
+     * - Lock key format ensures uniqueness across shows and seats
+     * - TTL ensures that if user abandons booking, seats become available again
+     * 
+     * @param userId - The ID of the user making the booking
+     * @param show - The show for which seats are being booked
+     * @param seatId - List of seat IDs to book
+     * @return Booking object in CREATED state
+     * @throws SeatNotAvailableException if any seat cannot be locked
+     */
     public Booking createBooking(String userId,Show show,List<Integer>seatId){
         for(Integer id:seatId){
             String key=show.getId()+":"+id;
@@ -37,6 +121,37 @@ class BookingService{
         System.out.println("Booking created: "+booking);
         return booking;
     }
+    
+    /**
+     * CONFIRM BOOKING - Final step after payment
+     * ------------------------------------------
+     * This method confirms a booking after successful payment processing.
+     * 
+     * WORKFLOW:
+     * 1. Validate booking is in CREATED state (not already confirmed/cancelled)
+     * 2. Verify all seat locks are still valid and held by the requesting user
+     *    - Check if lock hasn't expired (within TTL)
+     *    - Check if lock is still owned by the same user
+     *    - If validation fails, throw SeatNotAvailableException
+     * 3. Set payment type for the booking
+     * 4. Process payment using appropriate PaymentStrategy
+     * 5. Release all seat locks (as booking is now confirmed)
+     * 6. Update booking status to CONFIRMED
+     * 
+     * SECURITY & VALIDATION:
+     * - Prevents users from confirming bookings they don't own
+     * - Ensures locks haven't expired before payment
+     * - Atomic operation: either all seats are confirmed or none
+     * 
+     * LOCK RELEASE:
+     * - Locks are released after payment to allow others to book
+     * - Seat status is implicitly managed through booking records
+     * 
+     * @param booking - The booking to confirm
+     * @param type - Payment method (CARD, UPI, WALLET)
+     * @throws IllegalStateException if booking is not in CREATED state
+     * @throws SeatNotAvailableException if locks are expired or not owned by user
+     */
     public void confirmBooking(Booking booking, PaymentType type){
         if(!booking.getStatus().equals(BookingStatus.CREATED)){
            throw new IllegalStateException("Booking is not in CREATED state");
@@ -59,10 +174,98 @@ class BookingService{
         System.out.println("Booking confirmed: "+booking);
     }
 }
+
+/**
+ * LOCK PROVIDER INTERFACE - Distributed Locking Mechanism
+ * ========================================================
+ * 
+ * This interface defines the contract for implementing a distributed locking mechanism
+ * to handle concurrent seat booking requests in a thread-safe manner.
+ * 
+ * PURPOSE:
+ * - Prevent race conditions when multiple users try to book the same seat
+ * - Provide temporary exclusive access to resources (seats)
+ * - Support TTL (Time To Live) to prevent indefinite locking
+ * - Enable distributed systems to coordinate access across multiple instances
+ * 
+ * IMPLEMENTATIONS:
+ * 1. InMemoryLockProvider - Uses ConcurrentHashMap for single-instance applications
+ * 2. RedisLockProvider - Uses Redis for distributed/multi-instance applications
+ * 
+ * USE CASE IN BOOKING:
+ * - When user initiates booking, locks are acquired on selected seats
+ * - User has TTL duration (e.g., 5 seconds) to complete payment
+ * - If payment is completed within TTL, locks are released and booking is confirmed
+ * - If TTL expires, locks are automatically released and seats become available again
+ */
 interface LockProvider{
+    /**
+     * TRY LOCK - Attempt to acquire a lock on a resource
+     * --------------------------------------------------
+     * Tries to acquire an exclusive lock on a resource identified by 'key'.
+     * 
+     * BEHAVIOR:
+     * - If resource is unlocked or lock has expired: Acquire lock and return true
+     * - If resource is already locked by another user: Return false
+     * - If same user tries to lock again: Implementation-dependent (typically renew)
+     * 
+     * TTL (Time To Live):
+     * - Lock automatically expires after TTL milliseconds
+     * - Prevents deadlocks if user abandons the operation
+     * - Background sweeper threads clean up expired locks
+     * 
+     * ATOMICITY:
+     * - Lock check and acquisition must be atomic to prevent race conditions
+     * - Use compute() or similar atomic operations
+     * 
+     * @param key - Unique identifier for the resource (e.g., "showId:seatId")
+     * @param userId - ID of the user acquiring the lock
+     * @param TTL - Time to live in milliseconds before lock expires
+     * @return true if lock was acquired, false otherwise
+     */
     boolean tryLock(String key,String userId,long TTL);
+    
+    /**
+     * UNLOCK - Release a lock on a resource
+     * -------------------------------------
+     * Releases the lock on the specified resource, making it available for others.
+     * 
+     * WHEN TO USE:
+     * - After successful booking confirmation
+     * - When user cancels the booking
+     * - To manually release locks before TTL expiry
+     * 
+     * @param key - Unique identifier for the resource to unlock
+     */
     void unlock(String key);
+    
+    /**
+     * IS LOCK EXPIRED - Check if a lock has expired
+     * ---------------------------------------------
+     * Verifies if the lock on a resource has passed its TTL.
+     * 
+     * RETURNS:
+     * - true: Lock has expired or doesn't exist
+     * - false: Lock is still valid
+     * 
+     * @param key - Unique identifier for the resource
+     * @return true if lock is expired or doesn't exist, false otherwise
+     */
     boolean isLockExpired(String key);
+    
+    /**
+     * IS LOCKED BY - Check lock ownership
+     * -----------------------------------
+     * Verifies if a specific user currently holds the lock on a resource.
+     * 
+     * SECURITY:
+     * - Prevents users from confirming/modifying bookings they don't own
+     * - Ensures only the lock owner can perform operations on locked resources
+     * 
+     * @param key - Unique identifier for the resource
+     * @param userId - ID of the user to check ownership for
+     * @return true if the user holds a valid lock, false otherwise
+     */
     boolean isLockedBy(String key, String userId);
 }
 class InMemoryLockProvider implements LockProvider{
