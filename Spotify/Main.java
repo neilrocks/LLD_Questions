@@ -1,175 +1,163 @@
-package Spotify;
+/*
+=====================================================================
+SPOTIFY / MUSIC STREAMING SERVICE - LOW LEVEL DESIGN (SDE2 INTERVIEW)
+Single Java File Implementation
+Time Target: ~35 minutes
+=====================================================================
+
+========================
+FUNCTIONAL REQUIREMENTS
+========================
+1. User Management
+   - Users can register
+   - Users can login
+   - Users can manage profile
+
+2. Browse & Search
+   - Users can browse songs, albums, artists
+   - Users can search songs
+
+3. Playlists
+   - Users can create playlists
+   - Users can add/remove songs from playlists
+   - Users can manage playlists
+
+4. Playback Controls
+   - Play song
+   - Pause song
+   - Skip song
+   - Seek in song
+
+5. Recommendations
+   - Recommend songs based on listening history
+
+6. Follow Artists
+   - Users can follow artists
+
+========================
+NON FUNCTIONAL
+========================
+Concurrency
+Scalability
+Extensibility
+
+========================
+CORE ENTITIES
+========================
+
+Song
+ - id
+ - title
+ - artist
+ - album
+ - duration
+
+Album
+ - id
+ - name
+ - artist
+ - list<Song>
+
+Artist
+ - id
+ - name
+ - albums
+ - songs
+
+User
+ - id
+ - username
+ - password
+ - playlists
+ - listeningHistory
+ - followedArtists
+
+Playlist
+ - id
+ - name
+ - songs
+
+MusicLibrary (Singleton)
+ - stores songs
+ - stores albums
+ - stores artists
+
+UserManager (Singleton)
+ - manages registration/login
+ - manages users
+
+MusicPlayer
+ - play
+ - pause
+ - skip
+ - seek
+
+MusicRecommender (Singleton)
+ - generates recommendations
+
+MusicStreamingService
+ - entry point
+ - orchestrates system
+
+=====================================================================
+*/
+
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
-/* ───────────────────────── SONG ───────────────────────── */
 
+/* ================================================================
+   SONG
+   Represents a song in system
+   ================================================================ */
 class Song {
-    private String title;
-    private String artist;
-    private int duration;
-    private String path;
 
-    public Song(String title, String artist, int duration, String path) {
+    private String id;
+    private String title;
+    private Artist artist;
+    private Album album;
+    private int duration; // seconds
+
+    public Song(String id, String title, Artist artist, Album album, int duration) {
+        this.id = id;
         this.title = title;
         this.artist = artist;
+        this.album = album;
         this.duration = duration;
-        this.path = path;
     }
 
-    public String getTitle() {
-        return title;
-    }
+    public String getId() { return id; }
+    public String getTitle() { return title; }
+    public Artist getArtist() { return artist; }
+    public Album getAlbum() { return album; }
+    public int getDuration() { return duration; }
 
-    public String getArtist() {
-        return artist;
-    }
-
-    public int getDuration() {
-        return duration;
-    }
-
-    public String getPath() {
-        return path;
-    }
-
-    @Override
     public String toString() {
-        return "Song{" +
-                "title='" + title + '\'' +
-                ", artist='" + artist + '\'' +
-                ", duration=" + duration +
-                ", path='" + path + '\'' +
-                '}';
+        return title + " - " + artist.getName();
     }
 }
 
-/* ──────────────── AUDIO‑OUTPUT DEVICES & EXTERNAL APIS ──────────────── */
 
-interface AudioOutputDevice {
-    void playAudio(Song song);
-}
+/* ================================================================
+   ALBUM
+   Represents album containing multiple songs
+   ================================================================ */
+class Album {
 
-class BluetoothExternalApi {
-    void play(Song s) {
-        System.out.println("Playing on Bluetooth speaker: " + s.getTitle());
-    }
-}
+    private String id;
+    private String name;
+    private Artist artist;
+    private List<Song> songs = new ArrayList<>();
 
-class HeadphoneExternalApi {
-    void play(Song s) {
-        System.out.println("Playing on headphone: " + s.getTitle());
-    }
-}
-
-class EarphoneExternalApi {
-    void play(Song s) {
-        System.out.println("Playing on earphone: " + s.getTitle());
-    }
-}
-
-class BluetoothSpeaker implements AudioOutputDevice {
-    private final BluetoothExternalApi api;
-
-    BluetoothSpeaker(BluetoothExternalApi api) {
-        this.api = api;
-    }
-
-    public void playAudio(Song s) {
-        api.play(s);
-    }
-}
-
-class Headphone implements AudioOutputDevice {
-    private final HeadphoneExternalApi api;
-
-    Headphone(HeadphoneExternalApi api) {
-        this.api = api;
-    }
-
-    public void playAudio(Song s) {
-        api.play(s);
-    }
-}
-
-class Earphone implements AudioOutputDevice {
-    private final EarphoneExternalApi api;
-
-    Earphone(EarphoneExternalApi api) {
-        this.api = api;
-    }
-
-    public void playAudio(Song s) {
-        api.play(s);
-    }
-}
-
-/* ───────────────────── DEVICE FACTORY & MANAGER ───────────────────── */
-
-enum DeviceType {
-    BLUETOOTH_SPEAKER, HEADPHONE, EARPHONE
-}
-
-class DeviceFactory {
-    static AudioOutputDevice getDevice(DeviceType t) {
-        switch (t) {
-            case BLUETOOTH_SPEAKER:
-                return new BluetoothSpeaker(new BluetoothExternalApi());
-            case HEADPHONE:
-                return new Headphone(new HeadphoneExternalApi());
-            case EARPHONE:
-                return new Earphone(new EarphoneExternalApi());
-            default:
-                throw new IllegalArgumentException("Unknown device " + t);
-        }
-    }
-}
-
-class DeviceManager {
-    private static DeviceManager instance;
-    private DeviceType currentType;
-
-    private DeviceManager() {
-    }
-
-    public static DeviceManager getInstance() {
-        if (instance == null)
-            instance = new DeviceManager();
-        return instance;
-    }
-
-    public void connect(DeviceType t) {
-        currentType = t;
-        switch (t) {
-            case BLUETOOTH_SPEAKER:
-                System.out.println("Connecting to Bluetooth Speaker...");
-                break;
-            case HEADPHONE:
-                System.out.println("Connecting to Headphone...");
-                break;
-            case EARPHONE:
-                System.out.println("Connecting to Earphone...");
-                break;
-        }
-    }
-
-    public AudioOutputDevice getDevice() {
-        return DeviceFactory.getDevice(currentType);
-    }
-}
-
-/* ───────────────────────── PLAYLIST DOMAIN ───────────────────────── */
-
-class Playlist {
-    private final String name;
-    private final List<Song> songs = new ArrayList<>();
-
-    Playlist(String name) {
+    public Album(String id, String name, Artist artist) {
+        this.id = id;
         this.name = name;
+        this.artist = artist;
     }
 
-    public String getName() {
-        return name;
+    public void addSong(Song song) {
+        songs.add(song);
     }
 
     public List<Song> getSongs() {
@@ -177,358 +165,327 @@ class Playlist {
     }
 }
 
-class PlaylistManager {
-    private static PlaylistManager instance;
-    private final List<Playlist> playlists = new ArrayList<>();
-    private Playlist current;
 
-    private PlaylistManager() {
+/* ================================================================
+   ARTIST
+   Represents music artist
+   ================================================================ */
+class Artist {
+
+    private String id;
+    private String name;
+
+    private List<Album> albums = new ArrayList<>();
+    private List<Song> songs = new ArrayList<>();
+
+    public Artist(String id, String name) {
+        this.id = id;
+        this.name = name;
     }
 
-    public static PlaylistManager getInstance() {
-        if (instance == null)
-            instance = new PlaylistManager();
+    public void addAlbum(Album album) {
+        albums.add(album);
+    }
+
+    public void addSong(Song song) {
+        songs.add(song);
+    }
+
+    public String getName() {
+        return name;
+    }
+}
+
+
+/* ================================================================
+   PLAYLIST
+   Represents user playlist
+   ================================================================ */
+class Playlist {
+
+    private String id;
+    private String name;
+
+    private List<Song> songs = new ArrayList<>();
+
+    public Playlist(String id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
+    public void addSong(Song song) {
+        songs.add(song);
+    }
+
+    public void removeSong(Song song) {
+        songs.remove(song);
+    }
+
+    public List<Song> getSongs() {
+        return songs;
+    }
+}
+
+
+/* ================================================================
+   USER
+   Represents a spotify user
+   ================================================================ */
+class User {
+
+    private String id;
+    private String username;
+    private String password;
+
+    private List<Playlist> playlists = new ArrayList<>();
+    private List<Song> listeningHistory = new ArrayList<>();
+    private Set<Artist> followedArtists = new HashSet<>();
+
+    public User(String id, String username, String password) {
+        this.id = id;
+        this.username = username;
+        this.password = password;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public boolean validatePassword(String pass) {
+        return password.equals(pass);
+    }
+
+    public void addPlaylist(Playlist playlist) {
+        playlists.add(playlist);
+    }
+
+    public List<Song> getListeningHistory() {
+        return listeningHistory;
+    }
+
+    public void addToHistory(Song song) {
+        listeningHistory.add(song);
+    }
+
+    public void followArtist(Artist artist) {
+        followedArtists.add(artist);
+    }
+}
+
+
+/* ================================================================
+   MUSIC LIBRARY (SINGLETON)
+   Central storage for songs/albums/artists
+   ================================================================ */
+class MusicLibrary {
+
+    private static MusicLibrary instance = new MusicLibrary();
+
+    private Map<String, Song> songs = new ConcurrentHashMap<>();
+    private Map<String, Album> albums = new ConcurrentHashMap<>();
+    private Map<String, Artist> artists = new ConcurrentHashMap<>();
+
+    private MusicLibrary() {}
+
+    public static MusicLibrary getInstance() {
         return instance;
     }
 
-    public void createPlaylist(String name) {
-        Playlist p = new Playlist(name);
-        playlists.add(p);
-        if (current == null)
-            current = p;
+    public void addSong(Song song) {
+        songs.put(song.getId(), song);
     }
 
-    public void addPlaylist(Playlist p) {
-        playlists.add(p);
+    public void addAlbum(String id, Album album) {
+        albums.put(id, album);
     }
 
-    public void setCurrentPlaylist(Playlist p) {
-        current = p;
+    public void addArtist(String id, Artist artist) {
+        artists.put(id, artist);
     }
 
-    public Playlist getCurrentPlaylist() {
-        return current;
+    public Song getSong(String id) {
+        return songs.get(id);
     }
 
-    public List<Playlist> getPlaylists() {
-        return playlists;
-    }
-}
+    public List<Song> searchSong(String keyword) {
 
-/* ───────────────────────── PLAYING STRATEGIES ───────────────────────── */
+        List<Song> result = new ArrayList<>();
 
-enum StrategyType {
-    SEQUENTIAL, RANDOM, CUSTOM
-}
-
-abstract class PlayingStrategy {
-    protected List<Song> songs;
-    protected Playlist playlist;
-
-    public abstract boolean hasNext();
-
-    public abstract Song next();
-
-    public abstract boolean hasPrevious();
-
-    public abstract Song previous();
-}
-
-/* ―― Sequential ―― */
-class SequentialPlayingStrategy extends PlayingStrategy {
-    private int idx;
-
-    SequentialPlayingStrategy(Playlist p) {
-        setPlaylist(p);
-    }
-
-    void setPlaylist(Playlist p) {
-        playlist = p;
-        songs = p.getSongs();
-        idx = 0;
-    }
-
-    public boolean hasNext() {
-        return idx < songs.size();
-    }
-
-    public Song next() {
-        return hasNext() ? songs.get(idx++) : null;
-    }
-
-    public boolean hasPrevious() {
-        return idx > 0;
-    }
-
-    public Song previous() {
-        return hasPrevious() ? songs.get(--idx) : null;
-    }
-}
-
-/* ―― Random ―― */
-class RandomPlayingStrategy extends PlayingStrategy {
-    private final Random rng = new Random();
-    private final Set<Integer> played = new HashSet<>();
-
-    RandomPlayingStrategy(Playlist p) {
-        setPlaylist(p);
-    }
-
-    void setPlaylist(Playlist p) {
-        playlist = p;
-        songs = p.getSongs();
-        played.clear();
-    }
-
-    public boolean hasNext() {
-        return played.size() < songs.size();
-    }
-
-    public Song next() {
-        if (!hasNext())
-            return null;
-        int i;
-        do {
-            i = rng.nextInt(songs.size());
-        } while (played.contains(i));
-        played.add(i);
-        return songs.get(i);
-    }
-
-    public boolean hasPrevious() {
-        return !played.isEmpty();
-    }
-
-    public Song previous() {
-        if (!hasPrevious())
-            return null;
-        int i = played.iterator().next();
-        played.remove(i);
-        return songs.get(i);
-    }
-}
-
-/* ―― Custom ―― */
-class CustomPlayingStrategy extends PlayingStrategy {
-    private List<Song> custom;
-    private int idx;
-
-    CustomPlayingStrategy(Playlist p, List<Song> order) {
-        setCustomOrder(p, order);
-    }
-
-    void setCustomOrder(Playlist p, List<Song> order) {
-        playlist = p;
-        songs = p.getSongs();
-        custom = order;
-        idx = 0;
-    }
-
-    public boolean hasNext() {
-        return idx < custom.size();
-    }
-
-    public Song next() {
-        return hasNext() ? custom.get(idx++) : null;
-    }
-
-    public boolean hasPrevious() {
-        return idx > 0;
-    }
-
-    public Song previous() {
-        return hasPrevious() ? custom.get(--idx) : null;
-    }
-
-    public void addToNext(Song s) {
-        if (idx < custom.size())
-            custom.add(idx, s);
-        else
-            custom.add(s);
-    }
-}
-
-/* ───────────────────────── STRATEGY MANAGER ───────────────────────── */
-
-class StrategyManger {
-    private static StrategyManger instance;
-
-    private final Map<StrategyType, PlayingStrategy> map = new EnumMap<>(StrategyType.class);
-    private PlayingStrategy current;
-
-    private StrategyManger(Playlist defaultPl) {
-        map.put(StrategyType.SEQUENTIAL, new SequentialPlayingStrategy(defaultPl));
-        map.put(StrategyType.RANDOM, new RandomPlayingStrategy(defaultPl));
-        map.put(StrategyType.CUSTOM, new CustomPlayingStrategy(defaultPl, new ArrayList<>()));
-        current = map.get(StrategyType.SEQUENTIAL);
-    }
-
-    /* Singleton accessor */
-    public static StrategyManger getInstance() {
-        if (instance == null) {
-            Playlist pl = PlaylistManager.getInstance().getCurrentPlaylist();
-            if (pl == null)
-                pl = new Playlist("Default"); // safe‑guard
-            instance = new StrategyManger(pl);
+        for (Song s : songs.values()) {
+            if (s.getTitle().toLowerCase().contains(keyword.toLowerCase())) {
+                result.add(s);
+            }
         }
-        return instance;
-    }
 
-    /*
-     * ←―― NEW LOGIC: make sure *every* strategy sees the latest playlist before use
-     * ――→
-     */
-    private void refreshStrategiesWithCurrentPlaylist() {
-        Playlist pl = PlaylistManager.getInstance().getCurrentPlaylist();
-        ((SequentialPlayingStrategy) map.get(StrategyType.SEQUENTIAL)).setPlaylist(pl);
-        ((RandomPlayingStrategy) map.get(StrategyType.RANDOM)).setPlaylist(pl);
-        ((CustomPlayingStrategy) map.get(StrategyType.CUSTOM)).setCustomOrder(pl, new ArrayList<>(pl.getSongs()));
-    }
-
-    public void setStrategy(StrategyType t) {
-        refreshStrategiesWithCurrentPlaylist();
-        current = map.get(t);
-    }
-
-    public PlayingStrategy getCurrentStrategy() {
-        return current;
+        return result;
     }
 }
 
-/* ───────────────────────── AUDIO ENGINE ───────────────────────── */
 
-class AudioEngine {
-    private static AudioEngine instance;
-    private Song current;
+/* ================================================================
+   USER MANAGER (SINGLETON)
+   Handles registration & login
+   ================================================================ */
+class UserManager {
 
-    private AudioEngine() {
-    }
+    private static UserManager instance = new UserManager();
 
-    public static AudioEngine getInstance() {
-        if (instance == null)
-            instance = new AudioEngine();
+    private Map<String, User> users = new ConcurrentHashMap<>();
+
+    private UserManager(){}
+
+    public static UserManager getInstance() {
         return instance;
     }
 
-    public void playSong(AudioOutputDevice dev, Song s) {
-        current = s;
-        if (dev != null)
-            dev.playAudio(s);
-        else
-            System.out.println("No audio device.");
+    public void register(String id, String username, String password) {
+        users.put(username, new User(id, username, password));
     }
 
-    public void pauseSong() {
-        if (current != null)
-            System.out.println("Pausing: " + current.getTitle());
-        else
-            System.out.println("Nothing playing.");
+    public User login(String username, String password) {
+
+        User user = users.get(username);
+
+        if(user != null && user.validatePassword(password))
+            return user;
+
+        return null;
     }
 }
 
-/* ───────────────────────── FACADE ───────────────────────── */
 
-class MusicPlayerFacade {
-    private static MusicPlayerFacade instance;
-    private final AudioEngine audio = AudioEngine.getInstance();
-    private final PlaylistManager plMgr = PlaylistManager.getInstance();
-    private final StrategyManger strat = StrategyManger.getInstance();
-    private final DeviceManager devMgr = DeviceManager.getInstance();
+/* ================================================================
+   MUSIC PLAYER
+   Responsible for playback controls
+   ================================================================ */
+class MusicPlayer {
 
-    private MusicPlayerFacade() {
+    private Song currentSong;
+    private boolean isPlaying;
+    private int currentPosition;
+
+    public void play(Song song) {
+
+        currentSong = song;
+        isPlaying = true;
+        currentPosition = 0;
+
+        System.out.println("Playing: " + song);
     }
 
-    public static MusicPlayerFacade getInstance() {
-        if (instance == null)
-            instance = new MusicPlayerFacade();
+    public void pause() {
+
+        isPlaying = false;
+        System.out.println("Paused");
+    }
+
+    public void seek(int seconds) {
+
+        currentPosition = seconds;
+        System.out.println("Seek to: " + seconds);
+    }
+
+    public void skip(Song nextSong) {
+
+        play(nextSong);
+    }
+}
+
+
+/* ================================================================
+   MUSIC RECOMMENDER (SINGLETON)
+   Simple recommendation based on listening history
+   ================================================================ */
+class MusicRecommender {
+
+    private static MusicRecommender instance = new MusicRecommender();
+
+    private MusicRecommender(){}
+
+    public static MusicRecommender getInstance() {
         return instance;
     }
 
-    /* Thin‑wrappers */
-    public void connectDevice(DeviceType t) {
-        devMgr.connect(t);
-    }
+    public List<Song> recommend(User user) {
 
-    public void playSong(Song s) {
-        audio.playSong(devMgr.getDevice(), s);
-    }
+        List<Song> history = user.getListeningHistory();
 
-    public void pauseSong() {
-        audio.pauseSong();
-    }
+        if(history.isEmpty())
+            return new ArrayList<>();
 
-    public void setStrategy(StrategyType t) {
-        strat.setStrategy(t);
-    }
+        Song lastSong = history.get(history.size()-1);
 
-    public PlayingStrategy getCurrentStrategy() {
-        return strat.getCurrentStrategy();
-    }
+        // recommend songs from same artist
+        Artist artist = lastSong.getArtist();
 
-    public void createPlaylist(String name) {
-        plMgr.createPlaylist(name);
-    }
-
-    public void addPlaylist(Playlist p) {
-        plMgr.addPlaylist(p);
-    }
-
-    public Playlist getCurrentPlaylist() {
-        return plMgr.getCurrentPlaylist();
+        return new ArrayList<>(artist.songs);
     }
 }
 
-/* ───────────────────────── APPLICATION ───────────────────────── */
 
-class MusicPlayerApplication {
-    private static MusicPlayerApplication instance;
-    private final MusicPlayerFacade mp = MusicPlayerFacade.getInstance();
+/* ================================================================
+   MUSIC STREAMING SERVICE
+   Main entry point
+   ================================================================ */
+public class MusicStreamingService {
 
-    private MusicPlayerApplication() {
-    }
-
-    public static MusicPlayerApplication getInstance() {
-        if (instance == null)
-            instance = new MusicPlayerApplication();
-        return instance;
-    }
-
-    public void run() {
-        /* 1. Build playlist & songs */
-        mp.createPlaylist("My Favourite Songs");
-        Playlist pl = mp.getCurrentPlaylist();
-        Song s1 = new Song("Shape of You", "Ed Sheeran", 240, "/music/shape_of_you.mp3");
-        Song s2 = new Song("Blinding Lights", "The Weeknd", 200, "/music/blinding_lights.mp3");
-        Song s3 = new Song("Levitating", "Dua Lipa", 220, "/music/levitating.mp3");
-        Song s4 = new Song("Bad Guy", "Billie Eilish", 180, "/music/bad_guy.mp3");
-        Collections.addAll(pl.getSongs(), s1, s2, s3, s4);
-
-        /* 2. Connect device & play first song manually */
-        mp.connectDevice(DeviceType.BLUETOOTH_SPEAKER);
-        mp.playSong(s1);
-
-        /* 3. Sequential strategy */
-        mp.setStrategy(StrategyType.SEQUENTIAL);
-        PlayingStrategy strat = mp.getCurrentStrategy();
-        while (strat.hasNext())
-            mp.playSong(strat.next());
-
-        /* 4. Random strategy */
-        mp.setStrategy(StrategyType.RANDOM);
-        strat = mp.getCurrentStrategy();
-        while (strat.hasNext())
-            mp.playSong(strat.next());
-
-        /* 5. Switch device */
-        mp.connectDevice(DeviceType.HEADPHONE);
-        mp.playSong(s2);
-    }
-}
-
-/* ───────────────────────── MAIN ───────────────────────── */
-
-public class Main {
     public static void main(String[] args) {
-        MusicPlayerApplication.getInstance().run();
+
+        MusicLibrary library = MusicLibrary.getInstance();
+        UserManager userManager = UserManager.getInstance();
+        MusicPlayer player = new MusicPlayer();
+        MusicRecommender recommender = MusicRecommender.getInstance();
+
+
+        /* Create Sample Data */
+
+        Artist arijit = new Artist("A1","Arijit Singh");
+
+        Album album = new Album("AL1","Hits",arijit);
+
+        Song s1 = new Song("S1","Tum Hi Ho",arijit,album,200);
+        Song s2 = new Song("S2","Channa Mereya",arijit,album,220);
+
+        album.addSong(s1);
+        album.addSong(s2);
+
+        arijit.addSong(s1);
+        arijit.addSong(s2);
+
+        library.addSong(s1);
+        library.addSong(s2);
+
+
+        /* User Registration */
+
+        userManager.register("U1","swapnil","123");
+
+        User user = userManager.login("swapnil","123");
+
+        if(user == null){
+            System.out.println("Login failed");
+            return;
+        }
+
+
+        /* Search Song */
+
+        List<Song> results = library.searchSong("Tum");
+
+        Song songToPlay = results.get(0);
+
+
+        /* Play Song */
+
+        player.play(songToPlay);
+
+        user.addToHistory(songToPlay);
+
+
+        /* Recommendation */
+
+        List<Song> rec = recommender.recommend(user);
+
+        System.out.println("Recommended songs: " + rec);
     }
 }
