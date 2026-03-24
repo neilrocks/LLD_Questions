@@ -1,0 +1,139 @@
+EXPLANATION (STEP BY STEP)
+WHAT PROBLEM ARE WE SOLVING?
+
+We need to decide:
+"Should this request be allowed or rejected?"
+
+Constraints:
+
+Different APIs → different limits
+Same API → multiple limits (per min + per day)
+Group APIs → combined limit
+Must be fast (low latency)
+Must be thread-safe
+CORE IDEA
+
+For every request, we:
+
+Identify all applicable rules
+Increment counters
+If any limit exceeds → reject
+WHY COUNTER BASED APPROACH?
+
+We use a "Fixed Window Counter"
+
+Reason:
+
+O(1) time
+Very fast
+Simple to implement
+Works well in interviews
+
+Alternative:
+Sliding window → more accurate but complex
+
+MOST IMPORTANT: WHY COMPOSITE KEY?
+
+We need to uniquely identify a "bucket of requests"
+
+Ask yourself:
+
+👉 What defines a unique rate limit counter?
+
+Answer:
+
+User (who is making request)
+API or Group (what is being called)
+Time Window (when it is being counted)
+
+So key = (userId, api/group, timeWindow)
+
+STEP-BY-STEP THOUGHT PROCESS
+
+Let’s say:
+
+User = U1
+API = /login
+Limit = 5 requests per minute
+
+Now:
+
+If we only store "U1" → wrong (mixes all APIs)
+If we store "U1 + /login" → still wrong (no time window)
+If we store "U1 + /login + minute window" → correct
+HOW WINDOW WORKS
+
+We convert time into window bucket:
+
+windowStart = currentTime / windowSize
+
+Example:
+
+windowSize = 60 sec
+currentTime = 10:01:23
+
+windowStart = 10:01 bucket
+
+So all requests in that minute hit SAME counter
+
+FINAL COMPOSITE KEY
+
+CompositeKey:
+{
+userId = "U1",
+key = "/login" OR "group_name",
+windowStart = 123456
+}
+
+This ensures:
+
+No collision
+Correct counting
+Independent tracking
+WHY THREAD SAFE STRUCTURES?
+
+Multiple threads will hit same counter.
+
+We use:
+
+ConcurrentHashMap → safe reads/writes
+AtomicInteger → safe increment
+
+So increment becomes:
+atomic and lock-free
+
+HOW GROUP LIMITS WORK
+
+Example:
+Group = file_ops = (/upload, /download)
+
+Instead of storing separately:
+We store under:
+
+CompositeKey(user, "file_ops", window)
+
+So both APIs contribute to SAME counter
+
+TIME COMPLEXITY
+
+For each request:
+
+Check API rules → O(R)
+Check group rules → O(G)
+
+R, G are very small → effectively O(1)
+
+WHY THIS DESIGN IS GOOD
+Scalable
+Thread-safe
+Extensible (add more rules easily)
+Clean separation of concerns
+Interview friendly
+ONE LINE SUMMARY (SAY THIS)
+
+"We uniquely identify each rate limit bucket using (user + API/group + time window),
+and use a thread-safe counter to ensure O(1) rate limit checks."
+
+=========================
+END
+=========================
