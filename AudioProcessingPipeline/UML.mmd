@@ -1,0 +1,82 @@
+classDiagram
+
+    class AudioBuffer {
+        -long sequenceNumber
+        -long timestamp
+        -byte[] data
+        +getSequenceNumber() long
+        +getTimestamp() long
+        +getData() byte[]
+    }
+
+    class AudioProcessor {
+        <<interface>>
+        +process(AudioBuffer buffer) AudioBuffer
+    }
+
+    class NoiseReductionProcessor {
+        +process(AudioBuffer buffer) AudioBuffer
+    }
+
+    class EchoCancellationProcessor {
+        +process(AudioBuffer buffer) AudioBuffer
+    }
+
+    class EncodingProcessor {
+        +process(AudioBuffer buffer) AudioBuffer
+    }
+
+    class BufferQueue {
+        -BlockingQueue~AudioBuffer~ queue
+        +put(AudioBuffer buffer) void
+        +take() AudioBuffer
+        +size() int
+    }
+
+    class AudioStage {
+        -String name
+        -AudioProcessor processor
+        -BufferQueue inputQueue
+        -BufferQueue outputQueue
+        -AtomicBoolean running
+        +run() void
+        +stop() void
+    }
+
+    class AudioProducer {
+        -BufferQueue outputQueue
+        -int bufferSize
+        -long intervalMs
+        +run() void
+        +stop() void
+    }
+
+    class AudioConsumer {
+        -BufferQueue inputQueue
+        +run() void
+        +stop() void
+    }
+
+    class AudioPipeline {
+        -AudioProducer producer
+        -List~AudioStage~ stages
+        -AudioConsumer consumer
+        +start() void
+        +stop() void
+    }
+
+    AudioProcessor <|.. NoiseReductionProcessor
+    AudioProcessor <|.. EchoCancellationProcessor
+    AudioProcessor <|.. EncodingProcessor
+
+    AudioStage --> AudioProcessor : uses
+    AudioStage --> BufferQueue : input/output
+
+    BufferQueue --> AudioBuffer : contains
+
+    AudioProducer --> BufferQueue : produces to
+    AudioConsumer --> BufferQueue : consumes from
+
+    AudioPipeline --> AudioProducer : manages
+    AudioPipeline --> AudioStage : manages
+    AudioPipeline --> AudioConsumer : manages
